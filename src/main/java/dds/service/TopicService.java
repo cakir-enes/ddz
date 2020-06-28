@@ -1,7 +1,12 @@
 package dds.service;
 
 import dds.service.pubsub.PubSub;
+import dds.service.pubsub.nats.NatsPubSub;
 import dds.service.store.TopicStore;
+import dds.service.store.infinispan.InfinispanTopicStore;
+import dds.service.store.infinispan.TransientTopicStore;
+import io.nats.client.Connection;
+import io.nats.client.Nats;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -29,8 +34,15 @@ public class TopicService<T> {
     private final List<Consumer<T>> consumers;
     private TransferQueue<byte[]> channel;
 
-    public TopicService(Class<T> clazz, Mode mode, String scope, Serde<T> serde, PubSub pubSub, TopicStore<T> transientStore, TopicStore<T> persistentStore) {
+    public static <R> TopicService<R> createFor(Class<R> tClass, Mode mode, String scope) throws Exception {
+        Connection connect = Nats.connect();
+        NatsPubSub natsPubSub = new NatsPubSub(() -> connect);
+        TransientTopicStore<R> topicStore = InfinispanTopicStore.createFor(tClass.getName() + "-" + mode.name() + "-" + scope, Serde.SerdeOptions.json(tClass));
+        TransientTopicStore<R> topicStore2 = InfinispanTopicStore.createFor(tClass.getName() + "-PP-" + mode.name() + "-" + scope, Serde.SerdeOptions.json(tClass));
+        return new TopicService<>(tClass, mode, scope, Serde.SerdeOptions.json(tClass), natsPubSub, topicStore, topicStore2);
+    }
 
+    public TopicService(Class<T> clazz, Mode mode, String scope, Serde<T> serde, PubSub pubSub, TopicStore<T> transientStore, TopicStore<T> persistentStore) {
         this.mode = mode;
         this.transientStore = transientStore;
         this.persistentStore = persistentStore;
@@ -108,10 +120,10 @@ public class TopicService<T> {
             case VOLATILE:
                 break;
             case TRANSIENT:
-                transientStore.all().forEach(consumer);
+                transientStore.all().forEach(e -> consumer.accept(e.getValue()));
                 break;
             case PERSISTENT:
-                persistentStore.all().forEach(consumer);
+                persistentStore.all().forEach(e -> consumer.accept(e.getValue()));
                 break;
         }
     }

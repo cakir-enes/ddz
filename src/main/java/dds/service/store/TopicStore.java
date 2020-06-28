@@ -2,6 +2,8 @@ package dds.service.store;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
@@ -14,15 +16,15 @@ public interface TopicStore<T> {
 
     CompletableFuture<T> get(String key);
 
-    CompletableFuture<List<T>> get(Iterable<String> keys);
+    CompletableFuture<Map<String, T>> get(Set<String> keys);
 
     CompletableFuture<Void> delete(String key);
 
-    CompletableFuture<Void> delete(Iterable<String> keys);
+    CompletableFuture<Void> delete(Set<String> keys);
 
     Stream<String> keys();
 
-    Stream<T> all();
+    Stream<Map.Entry<String, T>> all();
 
     CompletableFuture<Void> drop();
 }
