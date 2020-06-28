@@ -1,17 +1,12 @@
 package dds.service.pubsub;
 
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TransferQueue;
-import java.util.function.Consumer;
 
-public interface PubSub<T> {
+public interface PubSub {
 
-    ForkJoinPool pool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
+    void publish(String topicName, byte[] topic);
 
-    void publish(T topic);
+    TransferQueue<byte[]> subscribe(String topicName);
 
-    void subscribe(Consumer<T> handler);
-
-    void unsubscribe(Consumer<T> handler);
-
+    void unsubscribe(String topicName);
 }

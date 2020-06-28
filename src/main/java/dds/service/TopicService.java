@@ -4,26 +4,40 @@ import dds.service.pubsub.PubSub;
 import dds.service.store.TopicStore;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TransferQueue;
 import java.util.function.Consumer;
 
 public class TopicService<T> {
 
-    enum Mode {
+    public enum Mode {
         VOLATILE,
         TRANSIENT,
         PERSISTENT
     }
+    private final static ExecutorService executorService = Executors.newWorkStealingPool(Runtime.getRuntime().availableProcessors());
 
     private final Mode mode;
     private final TopicStore<T> transientStore;
     private final TopicStore<T> persistentStore;
-    private final PubSub<T> pubsub;
+    private final Serde<T> serde;
+    private final PubSub pubsub;
+    private final String topicName;
+    private final List<Consumer<T>> consumers;
+    private TransferQueue<byte[]> channel;
 
-    public TopicService(Mode mode, String scope, PubSub<T> pubSub, TopicStore<T> transientStore, TopicStore<T> persistentStore) {
+    public TopicService(Class<T> clazz, Mode mode, String scope, Serde<T> serde, PubSub pubSub, TopicStore<T> transientStore, TopicStore<T> persistentStore) {
+
         this.mode = mode;
         this.transientStore = transientStore;
         this.persistentStore = persistentStore;
         this.pubsub = pubSub;
+        this.serde = serde;
+        this.topicName = clazz.getName() + "-" + mode.name() + "-" + scope;
+        this.consumers = new ArrayList<>();
     }
 
     public void publish(String key, T topic) {
@@ -31,7 +45,7 @@ public class TopicService<T> {
     }
 
     public void publish(String key, T topic, Duration duration) {
-        this.pubsub.publish(topic);
+        pubsub.publish(topicName, serde.serialize(topic));
         switch (mode) {
             case VOLATILE:
                 break;
@@ -46,11 +60,47 @@ public class TopicService<T> {
 
     public void subscribe(Consumer<T> consumer) {
         notifyWithPast(consumer);
-        pubsub.subscribe(consumer);
+        synchronized (consumers) {
+            consumers.add(consumer);
+            checkChannel();
+        }
     }
 
     public void unsubscribe(Consumer<T> consumer) {
-        pubsub.unsubscribe(consumer);
+        synchronized (consumers) {
+            consumers.remove(consumer);
+        }
+    }
+
+    public void delete(String key) {
+        transientStore.delete(key);
+        persistentStore.delete(key);
+    }
+
+    private void checkChannel() {
+        if (channel != null)
+            return;
+        channel = pubsub.subscribe(topicName);
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                while (true) {
+                    if (consumers.isEmpty()) {
+                        channel = null;
+                        pubsub.unsubscribe(topicName);
+                        return;
+                    }
+                    byte[] serialized = channel.take();
+                    T topic = serde.deserialize(serialized);
+                    executorService.execute(() -> {
+                        synchronized (consumers) {
+                            consumers.forEach(c -> executorService.execute(() -> c.accept(topic)));
+                        }
+                    });
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     private void notifyWithPast(Consumer<T> consumer) {

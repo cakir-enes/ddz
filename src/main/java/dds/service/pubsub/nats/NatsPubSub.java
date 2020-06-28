@@ -4,61 +4,47 @@ import dds.service.Serde;
 import dds.service.pubsub.PubSub;
 import io.nats.client.Connection;
 import io.nats.client.Dispatcher;
+
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.TransferQueue;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
-public class NatsPubSub<T> implements PubSub<T> {
+public class NatsPubSub implements PubSub {
 
-    private final Connection nats;
-    private final Serde<T> serde;
-    private final String topicName;
-    private final List<Consumer<T>> consumers;
-    private Dispatcher dispatcher;
+    private final Supplier<Connection> nats;
+    private Map<String, Dispatcher> dispatchers;
 
-
-    public NatsPubSub(Connection nats, Serde<T> serde, String topicName) {
+    public NatsPubSub(Supplier<Connection> nats) {
         this.nats = nats;
-        this.serde = serde;
-        this.topicName = topicName;
-        this.consumers = new ArrayList<>();
+        this.dispatchers = new ConcurrentHashMap<>();
     }
 
-    public void publish(T topic) {
-        nats.publish(topicName, serde.serialize(topic));
+    @Override
+    public void publish(String topicName, byte[] topic) {
+        nats.get().publish(topicName, topic);
     }
 
-    public void subscribe(Consumer<T> handler) {
-        getDispatcher();
-        synchronized (consumers) {
-            consumers.add(handler);
-        }
-    }
-
-    public void unsubscribe(Consumer<T> handler) {
-        synchronized (consumers) {
-            consumers.remove(handler);
-            if (consumers.isEmpty()) {
-                nats.closeDispatcher(dispatcher);
-            }
-        }
-    }
-
-    private Dispatcher getDispatcher() {
-        if (dispatcher == null || !dispatcher.isActive()) {
-            dispatcher = nats.createDispatcher(msg -> {
-                T topic = serde.deserialize(msg.getData());
-                notifyListeners(topic);
-            });
+    @Override
+    public TransferQueue<byte[]> subscribe(String topicName) {
+        TransferQueue<byte[]> queue = new LinkedTransferQueue<>();
+        dispatchers.computeIfAbsent(topicName, t -> {
+            Dispatcher dispatcher = nats.get().createDispatcher(msg -> queue.transfer(msg.getData()));
             dispatcher.subscribe(topicName);
-        }
-        return dispatcher;
+            return dispatcher;
+        });
+        return queue;
     }
 
-    private void notifyListeners(T topic) {
-        consumers.forEach(c -> {
-            System.out.println("[" + Thread.currentThread().getName() + "] executing...");
-            pool.execute(() -> c.accept(topic));
-        });
+    @Override
+    public void unsubscribe(String topicName) {
+        Dispatcher disp = dispatchers.remove(topicName);
+        if (disp != null)
+            nats.get().closeDispatcher(disp);
     }
 }
