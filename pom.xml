@@ -40,5 +40,13 @@
             <artifactId>infinispan-client-hotrod</artifactId>
             <version>11.0.0.Final</version>
         </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.foundationdb/fdb-java -->
+        <dependency>
+            <groupId>org.foundationdb</groupId>
+            <artifactId>fdb-java</artifactId>
+            <version>6.3.1</version>
+        </dependency>
+
     </dependencies>
 </project>

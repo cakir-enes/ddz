@@ -1,5 +1,6 @@
 package dds.service;
 
+import dds.sample.ThreadFac;
 import dds.service.pubsub.PubSub;
 import dds.service.pubsub.nats.NatsPubSub;
 import dds.service.store.TopicStore;
@@ -12,9 +13,9 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TransferQueue;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public class TopicService<T> {
@@ -24,8 +25,10 @@ public class TopicService<T> {
         TRANSIENT,
         PERSISTENT
     }
-    private final static ExecutorService executorService = Executors.newWorkStealingPool(Runtime.getRuntime().availableProcessors());
 
+//    private final static ExecutorService executorService = Executors.newWorkStealingPool(Runtime.getRuntime().availableProcessors());
+    //    private final static ExecutorService executorService = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
+//    private final static ExecutorService executorService = Executors.newFixedThreadPool(8, new ThreadFac("Sub"));
     private final Mode mode;
     private final TopicStore<T> transientStore;
     private final TopicStore<T> persistentStore;
@@ -33,10 +36,11 @@ public class TopicService<T> {
     private final PubSub pubsub;
     private final String topicName;
     private final List<Consumer<T>> consumers;
-    private TransferQueue<byte[]> channel;
+    private AtomicBoolean listening;
     private static Connection connect;
 
     static {
+
         try {
             connect = Nats.connect();
         } catch (IOException e) {
@@ -64,6 +68,7 @@ public class TopicService<T> {
         this.serde = serde;
         this.topicName = clazz.getName() + "-" + mode.name() + "-" + scope;
         this.consumers = new ArrayList<>();
+        this.listening = new AtomicBoolean(false);
     }
 
     public void publish(String key, T topic) {
@@ -103,25 +108,29 @@ public class TopicService<T> {
         persistentStore.delete(key);
     }
 
+    private final static ExecutorService executorService = Executors.newWorkStealingPool(Runtime.getRuntime().availableProcessors());
     private void checkChannel() {
-        if (channel != null)
+        if (listening.get())
             return;
-        channel = pubsub.subscribe(topicName);
-        Executors.newSingleThreadExecutor().execute(() -> {
+        listening.set(true);
+        final TransferQueue<byte[]> queue = pubsub.subscribe(topicName);
+        CompletableFuture.runAsync(() -> {
             try {
                 while (true) {
                     if (consumers.isEmpty()) {
-                        channel = null;
+                        listening.compareAndSet(true, false);
                         pubsub.unsubscribe(topicName);
+                        System.out.println("DONE");
                         return;
                     }
-                    byte[] serialized = channel.take();
+                    byte[] serialized = queue.take();
                     T topic = serde.deserialize(serialized);
-                    executorService.execute(() -> {
-                        synchronized (consumers) {
-                            consumers.forEach(c -> executorService.execute(() -> c.accept(topic)));
-                        }
-                    });
+                    synchronized (consumers) {
+                        consumers.forEach(c ->
+                            // If I run this with statically allocated `executorService.execute` it doesnt execute.
+                            executorService.execute(() -> c.accept(topic))
+                    );
+                    }
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();

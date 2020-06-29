@@ -11,21 +11,13 @@ import java.util.concurrent.TimeUnit;
 public class Publisher {
 
     public static int THREAD_COUNT = 100;
-    public static int PER_THREAD_TOPIC = 1000;
+    public static int PER_THREAD_TOPIC = 1_000_000;
 
     public static void main(String[] args) throws Exception {
-
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                System.err.println("RUNNNIING");
-            }
-        });
 
         Instant now = Instant.now();
         CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
         ThreadFac threadFac = new ThreadFac("PUBLISHER");
-
 
         for (int i = 0; i < THREAD_COUNT; i++) {
             TopicService<Subscriber.Address> ts = TopicService.createFor(Subscriber.Address.class, TopicService.Mode.VOLATILE, "scopee");
@@ -42,7 +34,11 @@ public class Publisher {
                 countDownLatch.countDown();
             }, 0, 2, TimeUnit.MILLISECONDS);
         }
+
         latch.await();
-        System.out.println("Pub in " + TimeUnit.MILLISECONDS.toSeconds(Duration.between(now, Instant.now()).toMillis()) + "sec");
+        long duration = Duration.between(now, Instant.now()).toMillis();
+        long durationSec = TimeUnit.MILLISECONDS.toSeconds(duration);
+        System.out.println("Pub in " + durationSec + "sec");
+        System.out.println((THREAD_COUNT * PER_THREAD_TOPIC) / durationSec + "msg/sec");
     }
 }

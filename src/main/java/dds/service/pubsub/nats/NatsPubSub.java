@@ -5,10 +5,7 @@ import dds.service.pubsub.PubSub;
 import io.nats.client.Connection;
 import io.nats.client.Dispatcher;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
@@ -18,11 +15,11 @@ import java.util.function.Supplier;
 public class NatsPubSub implements PubSub {
 
     private final Supplier<Connection> nats;
-    private Map<String, Dispatcher> dispatchers;
+    private static Map<String, Dispatcher> dispatchers = new ConcurrentHashMap<>();
+    ;
 
     public NatsPubSub(Supplier<Connection> nats) {
         this.nats = nats;
-        this.dispatchers = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -34,7 +31,9 @@ public class NatsPubSub implements PubSub {
     public TransferQueue<byte[]> subscribe(String topicName) {
         TransferQueue<byte[]> queue = new LinkedTransferQueue<>();
         dispatchers.computeIfAbsent(topicName, t -> {
-            Dispatcher dispatcher = nats.get().createDispatcher(msg -> queue.transfer(msg.getData()));
+            Dispatcher dispatcher = nats.get().createDispatcher(msg -> {
+                queue.transfer(msg.getData());
+            });
             dispatcher.subscribe(topicName);
             return dispatcher;
         });
