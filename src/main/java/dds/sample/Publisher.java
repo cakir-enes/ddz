@@ -1,54 +1,47 @@
 package dds.sample;
 
-import dds.service.Serde;
 import dds.service.TopicService;
-import dds.service.pubsub.nats.NatsPubSub;
-
-import io.nats.client.Connection;
-import io.nats.client.Nats;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class Publisher {
 
+    public static int THREAD_COUNT = 100;
+    public static int PER_THREAD_TOPIC = 1000;
+
     public static void main(String[] args) throws Exception {
 
-        TopicService<Subscriber.Address> ts = TopicService.createFor(Subscriber.Address.class, TopicService.Mode.TRANSIENT, "scopee");
-
-        AtomicInteger i = new AtomicInteger(0);
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                System.err.println("RUNNNIING");
+            }
+        });
 
         Instant now = Instant.now();
-        Serde<Subscriber.Address> json = Serde.SerdeOptions.json(Subscriber.Address.class);
-        CountDownLatch latch = new CountDownLatch(100_000);
-        Executors.newSingleThreadExecutor().execute(() -> {
-            for (int j = 0; j < 50_000; j++) {
-            ts.publish(j + "", new Subscriber.Address(j));
-//                connect.publish("abc", json.serialize(new App.Address()));
-                latch.countDown();
-                try {
-                    Thread.sleep(2);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-        Executors.newSingleThreadExecutor().execute(() -> {
-            for (int j = 0; j < 50_000; j++) {
-            ts.publish(j + "", new Subscriber.Address(j));
-//                connect.publish("abc", json.serialize(new App.Address()));
-                latch.countDown();
-                try {
-                    Thread.sleep(2);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
+        CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
+        ThreadFac threadFac = new ThreadFac("PUBLISHER");
 
+
+        for (int i = 0; i < THREAD_COUNT; i++) {
+            TopicService<Subscriber.Address> ts = TopicService.createFor(Subscriber.Address.class, TopicService.Mode.VOLATILE, "scopee");
+            CountDownLatch countDownLatch = new CountDownLatch(PER_THREAD_TOPIC);
+            Executors.newSingleThreadScheduledExecutor(threadFac).scheduleAtFixedRate(() -> {
+                if (countDownLatch.getCount() == 1) {
+                    latch.countDown();
+                    System.out.printf("[%s] Done. Remaining: %d\n", Thread.currentThread().getName(), latch.getCount());
+                } else if (countDownLatch.getCount() == 0) {
+                    return;
+                }
+                System.out.printf("[%s] publishing %d\n", Thread.currentThread().getName(), countDownLatch.getCount());
+                ts.publish("a", new Subscriber.Address(3));
+                countDownLatch.countDown();
+            }, 0, 2, TimeUnit.MILLISECONDS);
+        }
         latch.await();
         System.out.println("Pub in " + TimeUnit.MILLISECONDS.toSeconds(Duration.between(now, Instant.now()).toMillis()) + "sec");
     }

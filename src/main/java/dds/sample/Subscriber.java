@@ -29,10 +29,10 @@ public class Subscriber {
 
     public static void main(String[] args) throws Exception {
 
-        CountDownLatch latch = new CountDownLatch(100_000);
+        CountDownLatch latch = new CountDownLatch(Publisher.THREAD_COUNT * Publisher.PER_THREAD_TOPIC);
         Instant now = Instant.now();
 
-        TopicService<Address> ts = TopicService.createFor(Address.class, TopicService.Mode.TRANSIENT, "scopee");
+        TopicService<Address> ts = TopicService.createFor(Address.class, TopicService.Mode.VOLATILE, "scopee");
         ts.subscribe(add -> {
             System.out.println("REC: " + latch.getCount());
             latch.countDown();

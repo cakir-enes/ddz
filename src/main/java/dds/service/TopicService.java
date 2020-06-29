@@ -8,6 +8,7 @@ import dds.service.store.infinispan.TransientTopicStore;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,12 +34,25 @@ public class TopicService<T> {
     private final String topicName;
     private final List<Consumer<T>> consumers;
     private TransferQueue<byte[]> channel;
+    private static Connection connect;
+
+    static {
+        try {
+            connect = Nats.connect();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
 
     public static <R> TopicService<R> createFor(Class<R> tClass, Mode mode, String scope) throws Exception {
-        Connection connect = Nats.connect();
+
         NatsPubSub natsPubSub = new NatsPubSub(() -> connect);
-        TransientTopicStore<R> topicStore = InfinispanTopicStore.createFor(tClass.getName() + "-" + mode.name() + "-" + scope, Serde.SerdeOptions.json(tClass));
-        TransientTopicStore<R> topicStore2 = InfinispanTopicStore.createFor(tClass.getName() + "-PP-" + mode.name() + "-" + scope, Serde.SerdeOptions.json(tClass));
+//        TransientTopicStore<R> topicStore = InfinispanTopicStore.createFor(tClass.getName() + "-" + mode.name() + "-" + scope, Serde.SerdeOptions.json(tClass));
+//        TransientTopicStore<R> topicStore2 = InfinispanTopicStore.createFor(tClass.getName() + "-PP-" + mode.name() + "-" + scope, Serde.SerdeOptions.json(tClass));
+        TransientTopicStore<R> topicStore = null;
+        TransientTopicStore<R> topicStore2 = null;
         return new TopicService<>(tClass, mode, scope, Serde.SerdeOptions.json(tClass), natsPubSub, topicStore, topicStore2);
     }
 
