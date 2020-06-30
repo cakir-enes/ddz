@@ -1,9 +1,24 @@
 package dds.sample;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.ByteBufferOutput;
+import com.esotericsoftware.kryo.io.ByteBufferOutputStream;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import com.esotericsoftware.kryo.serializers.DefaultSerializers;
 import dds.service.TopicService;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -11,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 public class Publisher {
 
     public static int THREAD_COUNT = 100;
-    public static int PER_THREAD_TOPIC = 1_000_000;
+    public static int PER_THREAD_TOPIC = 400;
 
     public static void main(String[] args) throws Exception {
 
@@ -29,8 +44,8 @@ public class Publisher {
                 } else if (countDownLatch.getCount() == 0) {
                     return;
                 }
-                System.out.printf("[%s] publishing %d\n", Thread.currentThread().getName(), countDownLatch.getCount());
                 ts.publish("a", new Subscriber.Address(3));
+                System.out.printf("[%s] publishing %d\n", Thread.currentThread().getName(), countDownLatch.getCount());
                 countDownLatch.countDown();
             }, 0, 2, TimeUnit.MILLISECONDS);
         }
