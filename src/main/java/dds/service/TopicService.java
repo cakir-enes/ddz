@@ -57,7 +57,7 @@ public class TopicService<T> {
 //        TransientTopicStore<R> topicStore2 = InfinispanTopicStore.createFor(tClass.getName() + "-PP-" + mode.name() + "-" + scope, Serde.SerdeOptions.json(tClass));
         TransientTopicStore<R> topicStore = null;
         TransientTopicStore<R> topicStore2 = null;
-        return new TopicService<>(tClass, mode, scope, Serde.SerdeOptions.json(tClass), natsPubSub, topicStore, topicStore2);
+        return new TopicService<>(tClass, mode, scope, Serde.SerdeOptions.kryo(tClass), natsPubSub, topicStore, topicStore2);
     }
 
     public TopicService(Class<T> clazz, Mode mode, String scope, Serde<T> serde, PubSub pubSub, TopicStore<T> transientStore, TopicStore<T> persistentStore) {

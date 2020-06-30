@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Publisher {
 
-    public static int THREAD_COUNT = 100;
+    public static int THREAD_COUNT = 1;
     public static int PER_THREAD_TOPIC = 400;
 
     public static void main(String[] args) throws Exception {

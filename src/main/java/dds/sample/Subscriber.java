@@ -32,6 +32,16 @@ public class Subscriber {
     }
 
     public static void main(String[] args) throws Exception {
+//        Serde<Address> kryo = Serde.SerdeOptions.kryo(Address.class);
+//        for (int i = 0; i < 10; i++) {
+//            Executors.newSingleThreadExecutor().execute(() -> {
+//                Address address = new Address(3);
+//                byte[] serialize = kryo.serialize(address);
+//                Address deserialize = kryo.deserialize(serialize);
+//            });
+//        }
+
+
 
         CountDownLatch latch = new CountDownLatch(Publisher.THREAD_COUNT * Publisher.PER_THREAD_TOPIC);
         Instant now = Instant.now();
@@ -48,17 +58,12 @@ public class Subscriber {
 
 
             for (int j = 0; j < 10; j++) {
-
-
                     final int idx = idxx.getAndIncrement();
                     Consumer<Address> addressConsumer = add -> {
-
-                        System.out.println(idx + ": " + countDownLatches.get(idx).getCount());
+//                        System.out.println(idx + ": " + countDownLatches.get(idx).getCount());
                         countDownLatches.get(idx).countDown();
                     };
-
                     ts.subscribe(addressConsumer);
-
             }
         }
         System.err.println(idxx.get());
